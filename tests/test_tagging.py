@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from test_pycosmommf_parity import lognormal_cube
+from cubes import lognormal_cube
 
 import jaxweb
 from jaxweb.labels import SUMS, clump_sums

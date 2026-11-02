@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from cubes import lognormal_cube
 
 import jaxweb
 from jaxweb.signatures import _chunking
@@ -12,18 +13,6 @@ pcm = pytest.importorskip("pycosmommf")
 
 N = 32
 RS = [1.0, 2.0**0.5, 2.0, 2.0**1.5, 4.0]
-
-
-def lognormal_cube(n, seed=0):
-    """A δ+1 field with cosmic-web-like contrast: exp of a red-spectrum Gaussian field."""
-    rng = np.random.default_rng(seed)
-    k = np.sqrt(sum(np.meshgrid(*[np.fft.fftfreq(n) ** 2] * 3, indexing="ij")))
-    k[0, 0, 0] = 1.0
-    amp = k**-1.5
-    amp[0, 0, 0] = 0.0
-    g = np.fft.ifftn(amp * np.fft.fftn(rng.standard_normal((n, n, n)))).real
-    rho = np.exp(2.0 * g / g.std())
-    return (rho / rho.mean()).astype(np.float32)
 
 
 @pytest.fixture(scope="module")

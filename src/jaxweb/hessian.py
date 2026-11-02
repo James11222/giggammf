@@ -30,7 +30,7 @@ from jax import lax
 from jax.sharding import PartitionSpec as P
 
 from .fft import local_ky_index, local_partial_inverse_x, local_rfft3, wavenumbers
-from .mesh import AXIS, REAL_SPEC, check_shape
+from .mesh import AXIS, REAL_SPEC, as_sharded, check_shape, real_sharding
 from .smoothing import NEXUS, gaussian, local_loggauss_spectrum, resolve_floor
 
 
@@ -124,6 +124,7 @@ def hessian(density, R, mesh, algorithm=NEXUS, floor=None):
     """
     check_shape(density.shape, mesh)
     shape = density.shape
+    density = as_sharded(density, real_sharding(mesh), jnp.float32)
     n_dev = mesh.shape[AXIS]
     R = jnp.float32(R)
     floor = resolve_floor(density, mesh, algorithm, floor)

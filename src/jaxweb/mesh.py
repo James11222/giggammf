@@ -105,11 +105,13 @@ def slurm_local_device_ids(environ):
 def make_mesh(devices=None):
     """A 1D ``Mesh`` over ``devices`` (default: every device of every process)."""
     devices = jax.devices() if devices is None else list(devices)
+    # Not jax.make_mesh: on GPUs every node is a separate "slice", which it
+    # refuses. Each process's slabs are kept consecutive along x, so most
+    # clump boundaries are joined within a process.
+    devices = sorted(devices, key=lambda d: (d.process_index, d.id))
     # Auto axes: shard_map reshards inputs that arrive with another layout
     # (a NumPy array, say) instead of raising.
-    return jax.make_mesh(
-        (len(devices),), (AXIS,), axis_types=(jax.sharding.AxisType.Auto,), devices=devices
-    )
+    return jax.sharding.Mesh(np.array(devices), (AXIS,), axis_types=(jax.sharding.AxisType.Auto,))
 
 
 def real_sharding(mesh):

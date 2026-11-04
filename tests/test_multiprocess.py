@@ -108,9 +108,11 @@ def test_signatures_match(mesh, run, rho, key, algorithm, Rs):
         np.testing.assert_array_equal(results[key], want)
         return
     # NEXUS+ renormalises the mass with two psums, which the processes add up
-    # in another order: the total moves by an ulp, and so every signature.
+    # in another order: the total moves by an ulp, and so every signature. The
+    # signatures are eigenvalue ratios, so near-degenerate voxels amplify it
+    # (up to 1.6e-6 of the max on 4 CPUs, which depends on the thread count).
     for c in range(3):
-        np.testing.assert_allclose(results[key][c], want[c], rtol=0, atol=1e-6 * want[c].max())
+        np.testing.assert_allclose(results[key][c], want[c], rtol=0, atol=1e-5 * want[c].max())
 
 
 @pytest.mark.parametrize("statistic", ["mean", "max"])

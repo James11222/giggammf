@@ -33,7 +33,8 @@ FLOOR_FACTOR = 0.1
 def _make_count_in(mesh):
     """
     Jitted voxel counts of ``0 < ρ <= t``, one int32 per x-chunk and device
-    (int32 cannot hold the count of a 2048³ slab); sum them on the host.
+    (int32 cannot hold the count of a 2048³ slab), gathered on every device so
+    every process can sum them on the host.
     """
 
     def local(rho, t):
@@ -44,9 +45,10 @@ def _make_count_in(mesh):
             r = lax.dynamic_slice_in_dim(rho, c * planes, planes, axis=0)
             return jnp.sum((r > 0) & (r <= t), dtype=jnp.int32)
 
-        return lax.map(count, jnp.arange(nx // planes))
+        counts = lax.map(count, jnp.arange(nx // planes))
+        return lax.all_gather(counts, AXIS, tiled=True, to="invarying")
 
-    fn = jax.shard_map(local, mesh=mesh, in_specs=(REAL_SPEC, P()), out_specs=P(AXIS))
+    fn = jax.shard_map(local, mesh=mesh, in_specs=(REAL_SPEC, P()), out_specs=P())
     return jax.jit(fn)
 
 
@@ -156,6 +158,7 @@ def smooth(density, R, mesh, algorithm=NEXUSPLUS, floor=None):
     """
     check_shape(density.shape, mesh)
     shape = density.shape
+    density = as_sharded(density, real_sharding(mesh), jnp.float32)
     R = jnp.float32(R)
     floor = resolve_floor(density, mesh, algorithm, floor)
 

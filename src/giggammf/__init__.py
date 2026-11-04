@@ -1,5 +1,5 @@
 """
-jaxweb: the NEXUS and NEXUS+ multiscale morphology filters for the cosmic web
+giggammf: the NEXUS and NEXUS+ multiscale morphology filters for the cosmic web
 (Cautun et al. 2013) on many GPUs with JAX.
 """
 

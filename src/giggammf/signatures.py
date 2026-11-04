@@ -10,6 +10,7 @@ import numpy as np
 from jax import lax
 from jax.sharding import PartitionSpec as P
 
+from .distributed import any_process, to_numpy
 from .eigen import eigvalsh_3x3_sym, signatures_from_eigenvalues
 from .fft import largest_divisor_at_most, local_rfft3
 from .hessian import hessian_from_spectra, local_hessian_spectra
@@ -114,9 +115,13 @@ def _should_offload(shape, mesh):
     ``benchmarks/memory_estimate.py``) plus the log-spectrum and the density,
     which callers usually keep for tagging: ~9.2 slabs (73 GiB at 2048³ on
     4 GPUs, measured).
+
+    Each process looks at one of its own devices, and all processes offload if
+    any one needs to, so that they all run the same steps.
     """
-    limit = _memory_limit(mesh.devices.flat[0])
-    return bool(limit) and 9.2 * _slab_bytes(shape, mesh) > 0.9 * limit
+    device = next(d for d in mesh.devices.flat if d.process_index == jax.process_index())
+    limit = _memory_limit(device)
+    return any_process(bool(limit) and 9.2 * _slab_bytes(shape, mesh) > 0.9 * limit)
 
 
 def _make_base(mesh, shape, algorithm, chunk_elements=CHUNK_ELEMENTS):
@@ -152,14 +157,14 @@ def maximum_signature(
 
     Args:
         density: 3D δ+1 = ρ/⟨ρ⟩ field of a periodic box, a NumPy array or an
-            x-sharded JAX array (see ``jaxweb.load_density``). Converted to
+            x-sharded JAX array (see ``giggammf.load_density``). Converted to
             float32.
         Rs: smoothing scales in voxels, e.g. ``[2 ** (n / 2) for n in range(9)]``.
         algorithm: ``"NEXUS"`` (Gaussian smoothing of ρ) or ``"NEXUSPLUS"``
             (Gaussian smoothing of log10 ρ, which needs ρ > 0).
-        mesh: the device mesh; default ``jaxweb.make_mesh()`` over every device.
+        mesh: the device mesh; default ``giggammf.make_mesh()`` over every device.
         floor: NEXUS+ only. ρ is clipped to at least ``floor`` before log10.
-            ``None`` (default) uses ``jaxweb.density_floor``: a tenth of the
+            ``None`` (default) uses ``giggammf.density_floor``: a tenth of the
             1% quantile of the positive voxels, so empty voxels sit just
             below the occupied ones instead of many decades below.
         chunk_elements: elements per chunk in the chunked loops; lower it to
@@ -229,8 +234,11 @@ def maximum_signature(
 
 
 def to_pycosmommf_layout(sigmax):
-    """``(3, nx, ny, nz)`` signatures as a NumPy ``(nx, ny, nz, 3)`` array (small grids only)."""
-    return np.moveaxis(np.asarray(sigmax), 0, -1)
+    """
+    ``(3, nx, ny, nz)`` signatures as a NumPy ``(nx, ny, nz, 3)`` array, whole
+    on every process (small grids only).
+    """
+    return np.moveaxis(to_numpy(sigmax), 0, -1)
 
 
 __all__ = ["NEXUS", "NEXUSPLUS", "maximum_signature", "to_pycosmommf_layout"]

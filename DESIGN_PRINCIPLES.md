@@ -18,7 +18,7 @@ Context for a Claude Code session fixing the out-of-memory error at 2048³ on on
 5. **Closed-form eigenvalues** (Smith 1961, max-abs rescaled), elementwise. There is no `(…,3,3)` tensor and no `eigh`. This is the same solver as PyCosmoMMF, so keep the two in sync.
 6. **NEXUS fuses the Gaussian into the Hessian multipliers.** No smoothed field is ever stored. NEXUS+ needs a real-space round trip (smooth log10 ρ, 10^x, renormalise the mass, forward FFT), so it runs as a separate jit (`_make_loggauss_step`) before the signature jit.
 7. **Host offload (`offload=`)** keeps the NEXUS+ log-spectrum in pinned host memory between scales, which saves one slab per GPU. It turns on automatically when `memory_stats()["bytes_limit"]` is too small.
-8. **Tagging** mirrors PyCosmoMMF step for step. Clumps are labelled per device with CuPy in pieces of at most 2³⁰ voxels, then stitched across piece and slab faces on the host. Multi-process stitching is not written yet.
+8. **Tagging** mirrors PyCosmoMMF step for step. Clumps are labelled per device with CuPy in pieces of at most 2³⁰ voxels, then stitched across piece, slab and process faces: touching label pairs are found on the device, and only they and the sums of their labels are gathered on the host (`labels.py`).
 
 ## Memory budget (per GPU, 2048³ on 4 GPUs; 1 slab = 8 GiB)
 

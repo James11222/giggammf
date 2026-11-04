@@ -36,7 +36,7 @@ def wavenumbers(index, n, part="full"):
     PyCosmoMMF. ``part="odd"`` gives the same values with the Nyquist entry
     set to 0, and ``part="nyquist"`` gives only the Nyquist entry (``-π``)
     and 0 elsewhere; the two add up to ``"full"``. The Hessian needs the split
-    for its off-diagonal terms (see ``jaxweb.hessian``).
+    for its off-diagonal terms (see ``giggammf.hessian``).
     """
     index = jnp.asarray(index)
     signed = jnp.where(index >= (n + 1) // 2, index - n, index)

@@ -23,6 +23,7 @@ import numpy as np
 from jax import lax
 from jax.sharding import PartitionSpec as P
 
+from .distributed import process_sum
 from .fft import largest_divisor_at_most
 from .labels import clump_sums
 from .mesh import (
@@ -40,7 +41,7 @@ from .mesh import (
 CLUSTER, FILAMENT, WALL, VOID = 1, 2, 3, 4
 
 # Per-clump δ statistics a clump's virialization can be judged by, and the
-# ``labels.clump_sums`` each needs. jaxweb uses the max, PyCosmoMMF the mean.
+# ``labels.clump_sums`` each needs. giggammf uses the max, PyCosmoMMF the mean.
 CLUMP_STATISTICS = {
     "mean": ("count", "delta"),
     "mass_weighted": ("mass", "mass_delta"),
@@ -189,8 +190,8 @@ def _structure_filter(clusbool, sigmax, filament_thresh, wall_thresh):
 def _make_fractions(mesh):
     """
     Jitted per-type voxel counts and float32 masses, one pass, chunked over x.
-    Counts come back per chunk (int32 cannot hold a 2048³ total) and are
-    added on the host.
+    Counts come back per chunk (int32 cannot hold a 2048³ total), gathered on
+    every device, and are added on the host.
     """
 
     def local(structure, rho):
@@ -208,16 +209,16 @@ def _make_fractions(mesh):
 
         mass = lax.pcast(jnp.zeros(4, jnp.float32), (AXIS,), to="varying")
         mass, counts = lax.scan(lambda m, c: body(c, m), mass, jnp.arange(nx // planes))
-        return counts, lax.psum(mass, AXIS)
+        return lax.all_gather(counts, AXIS, tiled=True, to="invarying"), lax.psum(mass, AXIS)
 
-    fn = jax.shard_map(local, mesh=mesh, in_specs=(REAL_SPEC, REAL_SPEC), out_specs=(P(AXIS), P()))
+    fn = jax.shard_map(local, mesh=mesh, in_specs=(REAL_SPEC, REAL_SPEC), out_specs=(P(), P()))
     return jax.jit(fn)
 
 
 def _mass_threshold(sigmax, component, rho, valid, Smin, Smax, mesh):
     log10S = log10S_grid(Smin, Smax)
     thresholds = np.power(np.float32(10.0), log10S)
-    masses = _make_masked_masses(mesh, component)(sigmax, rho, valid, jnp.asarray(thresholds))
+    masses = _make_masked_masses(mesh, component)(sigmax, rho, valid, thresholds)
     M = np.asarray(masses, dtype=np.float32)
     S, dM2 = mass_change_curve(log10S, M)
     return S[np.argmax(dM2)], S, dM2
@@ -229,7 +230,9 @@ def _cluster_bool(rho, sigmax, overdensity_threshold, thresholds, clump_statisti
     for i, S_th in enumerate(thresholds):
         sums = clump_sums(_cluster_mask(sigmax, S_th), rho, mesh, names, overdensity_threshold)
         virialized = virialized_clumps(sums, clump_statistic, overdensity_threshold)
-        fractions[i] = virialized_fraction(np.count_nonzero(virialized), len(virialized))
+        # Each process holds its share of the clumps.
+        n_virialized, n_clumps = process_sum([np.count_nonzero(virialized), len(virialized)])
+        fractions[i] = virialized_fraction(n_virialized, n_clumps)
     S_th = select_cluster_threshold(thresholds, fractions)
     if S_th is None:
         warn_unresolved_clusters(overdensity_threshold, clump_statistic)
@@ -268,7 +271,7 @@ def tag_structures(
             ``overdensity_threshold`` in step 1, one of ``CLUMP_STATISTICS``:
             ``"max"`` (the default), ``"mean"`` (PyCosmoMMF's),
             ``"mass_weighted"`` or ``"median"``; see ``virialized_clumps``.
-        mesh: the device mesh; default ``jaxweb.make_mesh()``.
+        mesh: the device mesh; default ``giggammf.make_mesh()``.
         verbose: print PyCosmoMMF's report.
 
     Returns:

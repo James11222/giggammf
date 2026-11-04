@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from test_pycosmommf_parity import lognormal_cube
+from cubes import lognormal_cube
 
-import jaxweb
-from jaxweb.labels import SUMS, clump_sums
-from jaxweb.tagging import CLUMP_STATISTICS, virialized_clumps
+import giggammf
+from giggammf.labels import SUMS, clump_sums
+from giggammf.tagging import CLUMP_STATISTICS, virialized_clumps
 
 pcm = pytest.importorskip("pycosmommf")
 skimage_measure = pytest.importorskip("skimage.measure")
 
 RS = [1.0, 2.0**0.5, 2.0, 2.0**1.5]
-# PyCosmoMMF's cluster-signature grid, which jaxweb's default refines and extends.
-PCM_CLUSTER_THRESHOLDS = jaxweb.tagging.cluster_signature_thresholds(smax=30, n=10)
+# PyCosmoMMF's cluster-signature grid, which giggammf's default refines and extends.
+PCM_CLUSTER_THRESHOLDS = giggammf.tagging.cluster_signature_thresholds(smax=30, n=10)
 
 
 def reference_clump_means(mask, delta):
@@ -42,7 +42,7 @@ def test_clumps_join_across_slabs(mesh, fill):
 
 
 def test_labelling_in_pieces_within_a_slab(mesh, monkeypatch):
-    monkeypatch.setattr(jaxweb.labels, "LABEL_ELEMENTS", 2 * 24 * 20)  # 2-plane pieces
+    monkeypatch.setattr(giggammf.labels, "LABEL_ELEMENTS", 2 * 24 * 20)  # 2-plane pieces
     rng = np.random.default_rng(5)
     mask = rng.random((32, 24, 20)) < 0.25
     delta = rng.standard_normal(mask.shape).astype(np.float32)
@@ -139,7 +139,7 @@ def test_tagging_matches_pycosmommf(mesh, tagged_cube, overdensity_threshold, ca
         rho, sigs, True, overdensity_threshold=overdensity_threshold
     )
     capsys.readouterr()
-    got, summary = jaxweb.tag_structures(
+    got, summary = giggammf.tag_structures(
         rho,
         np.moveaxis(sigs, -1, 0),
         overdensity_threshold=overdensity_threshold,
@@ -157,7 +157,7 @@ def test_tagging_matches_pycosmommf(mesh, tagged_cube, overdensity_threshold, ca
     np.testing.assert_allclose(summary["dM2_fil"], want_summary["dM2_fil"], rtol=1e-3)
     np.testing.assert_allclose(summary["dM2_wall"], want_summary["dM2_wall"], rtol=1e-3)
     np.testing.assert_array_equal(got, want)
-    assert np.any(got == jaxweb.CLUSTER)
+    assert np.any(got == giggammf.CLUSTER)
     np.testing.assert_allclose(summary["volume_fractions"], want_summary["volume_fractions"])
     np.testing.assert_allclose(summary["mass_fractions"], want_summary["mass_fractions"], rtol=1e-5)
 
@@ -166,7 +166,7 @@ def test_clump_statistic_shifts_the_virialized_fraction(mesh, tagged_cube):
     rho, sigs = tagged_cube
     f_vir = {}
     for statistic in CLUMP_STATISTICS:
-        _, summary = jaxweb.tag_structures(
+        _, summary = giggammf.tag_structures(
             rho,
             np.moveaxis(sigs, -1, 0),
             overdensity_threshold=40,
@@ -184,23 +184,23 @@ def test_clump_statistic_shifts_the_virialized_fraction(mesh, tagged_cube):
 def test_unknown_clump_statistic_raises(mesh, tagged_cube):
     rho, sigs = tagged_cube
     with pytest.raises(ValueError, match="clump_statistic"):
-        jaxweb.tag_structures(rho, np.moveaxis(sigs, -1, 0), clump_statistic="mode", mesh=mesh)
+        giggammf.tag_structures(rho, np.moveaxis(sigs, -1, 0), clump_statistic="mode", mesh=mesh)
 
 
 def test_unresolved_clusters_warn_and_leave_no_clusters(mesh, tagged_cube, capsys):
     rho, sigs = tagged_cube
-    got, summary = jaxweb.tag_structures(
+    got, summary = giggammf.tag_structures(
         rho, np.moveaxis(sigs, -1, 0), overdensity_threshold=1e6, mesh=mesh
     )
     assert "WARNING" in capsys.readouterr().out
     assert summary["S_clus_thresh"] is None
-    assert not np.any(np.asarray(got) == jaxweb.CLUSTER)
+    assert not np.any(np.asarray(got) == giggammf.CLUSTER)
 
 
 def test_overdensity_input_raises(mesh, tagged_cube):
     rho, sigs = tagged_cube
     with pytest.raises(ValueError, match="δ"):
-        jaxweb.tag_structures(rho - 1.0, np.moveaxis(sigs, -1, 0), mesh=mesh)
+        giggammf.tag_structures(rho - 1.0, np.moveaxis(sigs, -1, 0), mesh=mesh)
 
 
 def test_end_to_end_matches_pycosmommf(mesh, capsys):
@@ -209,9 +209,9 @@ def test_end_to_end_matches_pycosmommf(mesh, capsys):
         rho, pcm.maximum_signature(RS, rho), True, overdensity_threshold=20
     )
     capsys.readouterr()
-    got, summary = jaxweb.tag_structures(
+    got, summary = giggammf.tag_structures(
         rho,
-        jaxweb.maximum_signature(rho, RS, mesh=mesh, floor=rho.min()),
+        giggammf.maximum_signature(rho, RS, mesh=mesh, floor=rho.min()),
         overdensity_threshold=20,
         cluster_thresholds=PCM_CLUSTER_THRESHOLDS,
         clump_statistic="mean",

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "jaxweb"
+name = "giggammf"
 version = "0.1.0"
 description = "NEXUS and NEXUS+ cosmic web classification on many GPUs with JAX"
 readme = "README.md"
@@ -27,7 +27,7 @@ test = [
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/jaxweb"]
+packages = ["src/giggammf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -10,10 +10,10 @@ os.environ.setdefault("JAX_PLATFORMS", "cpu")
 import jax
 import pytest
 
-import jaxweb
+import giggammf
 
 
 @pytest.fixture(scope="session")
 def mesh():
     assert len(jax.devices()) == 4
-    return jaxweb.make_mesh()
+    return giggammf.make_mesh()

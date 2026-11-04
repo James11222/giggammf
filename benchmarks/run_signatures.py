@@ -15,8 +15,8 @@ import time
 import jax
 import numpy as np
 
-import jaxweb
-from jaxweb.distributed import allgather
+import giggammf
+from giggammf.distributed import allgather
 
 GiB = 2**30
 
@@ -30,16 +30,18 @@ def main():
     parser.add_argument("--tile", type=int, default=1, help="repeat the cube k times per axis")
     args = parser.parse_args()
 
-    jaxweb.initialize()
-    mesh = jaxweb.make_mesh()
+    giggammf.initialize()
+    mesh = giggammf.make_mesh()
     Rs = [2 ** (n / 2) for n in range(args.n_scales)]
     offload = {"auto": None, "on": True, "off": False}[args.offload]
 
     t0 = time.perf_counter()
-    rho = jaxweb.load_density(args.path, mesh, tile=args.tile)
+    rho = giggammf.load_density(args.path, mesh, tile=args.tile)
     rho.block_until_ready()
     t1 = time.perf_counter()
-    sigmax = jaxweb.maximum_signature(rho, Rs, algorithm=args.algorithm, mesh=mesh, offload=offload)
+    sigmax = giggammf.maximum_signature(
+        rho, Rs, algorithm=args.algorithm, mesh=mesh, offload=offload
+    )
     sigmax.block_until_ready()
     t2 = time.perf_counter()
 

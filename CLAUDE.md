@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-`jaxweb` computes the NEXUS / NEXUS+ multiscale morphology filters (Cautun et al. 2013) on many GPUs with JAX. It is a rewrite of PyCosmoMMF (`James11222/PyCosmoMMF`), which is the reference for correctness. Design target: a 2048³ float32 cube on one node of 4× A100 80 GB; runs on several nodes (one process per GPU or per node, `scripts/tag_cube_multinode.slurm`), aiming at 4096³ on 32 GPUs.
+`giggammf` computes the NEXUS / NEXUS+ multiscale morphology filters (Cautun et al. 2013) on many GPUs with JAX. It is a rewrite of PyCosmoMMF (`James11222/PyCosmoMMF`), which is the reference for correctness. Design target: a 2048³ float32 cube on one node of 4× A100 80 GB; runs on several nodes (one process per GPU or per node, `scripts/tag_cube_multinode.slurm`), aiming at 4096³ on 32 GPUs.
 
 ## Commands
 

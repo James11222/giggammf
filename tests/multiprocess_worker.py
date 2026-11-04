@@ -20,9 +20,9 @@ import numpy as np
 from cubes import lognormal_cube
 from jax.experimental import multihost_utils
 
-import jaxweb
-from jaxweb.distributed import allgather, to_numpy
-from jaxweb.labels import SUMS, clump_sums
+import giggammf
+from giggammf.distributed import allgather, to_numpy
+from giggammf.labels import SUMS, clump_sums
 
 RS = [1.0, 2.0**0.5, 2.0, 2.0**1.5]
 SUMMARY_KEYS = ("S_clus_thresh", "S_fil_thresh", "S_wall_thresh", "f_vir_clus")
@@ -39,25 +39,25 @@ def clump_problem():
 def main():
     process_id, n_processes, port, out = sys.argv[1:]
     out = Path(out)
-    jaxweb.initialize(
+    giggammf.initialize(
         coordinator_address=f"localhost:{port}",
         num_processes=int(n_processes),
         process_id=int(process_id),
     )
-    mesh = jaxweb.make_mesh()
+    mesh = giggammf.make_mesh()
     rho = lognormal_cube(64, seed=7)
-    results = {"floor": np.float32(jaxweb.density_floor(rho, mesh))}
+    results = {"floor": np.float32(giggammf.density_floor(rho, mesh))}
 
-    sigmax = jaxweb.maximum_signature(rho, RS, mesh=mesh)
+    sigmax = giggammf.maximum_signature(rho, RS, mesh=mesh)
     results["sig_nexusplus"] = to_numpy(sigmax)
-    sig_offload = jaxweb.maximum_signature(rho, RS[:2], mesh=mesh, offload=True)
+    sig_offload = giggammf.maximum_signature(rho, RS[:2], mesh=mesh, offload=True)
     results["sig_offload"] = to_numpy(sig_offload)
-    sig_nexus = jaxweb.maximum_signature(rho, RS, algorithm="NEXUS", mesh=mesh)
+    sig_nexus = giggammf.maximum_signature(rho, RS, algorithm="NEXUS", mesh=mesh)
     results["sig_nexus"] = to_numpy(sig_nexus)
 
     summaries = {}
     for statistic in ("mean", "max"):
-        structure, summary = jaxweb.tag_structures(
+        structure, summary = giggammf.tag_structures(
             rho, sigmax, overdensity_threshold=20, clump_statistic=statistic, mesh=mesh
         )
         results[f"structure_{statistic}"] = to_numpy(structure)
@@ -69,12 +69,12 @@ def main():
     # 2-plane pieces: 4 pieces per slab, so clumps join across pieces, slabs
     # and the boundary between the two processes.
     mask, rho_int = clump_problem()
-    jaxweb.labels.LABEL_ELEMENTS = 2 * 24 * 20
+    giggammf.labels.LABEL_ELEMENTS = 2 * 24 * 20
     sums = clump_sums(mask, rho_int, mesh, SUMS, 19.5)
     table = np.stack([sums[name].astype(np.float64) for name in SUMS], axis=1)
     results["clump_table"] = allgather(table)  # every process's share of the clumps
 
-    results["tiled"] = to_numpy(jaxweb.load_density(out / "cube.npy", mesh, tile=2))
+    results["tiled"] = to_numpy(giggammf.load_density(out / "cube.npy", mesh, tile=2))
     results["n_processes"] = np.int32(jax.process_count())
     results["n_devices"] = np.int32(jax.device_count())
 

@@ -1,6 +1,6 @@
 """Device mesh, multi-process start-up and the shardings every module uses.
 
-jaxweb uses a 1D mesh with one axis, ``"x"``, over every GPU of every process,
+giggammf uses a 1D mesh with one axis, ``"x"``, over every GPU of every process,
 so a job on several nodes splits the cube into one slab per GPU across all of
 them.
 
@@ -129,7 +129,7 @@ def sig_sharding(mesh):
 def check_shape(shape, mesh):
     """Raise ``ValueError`` unless a cube of ``shape`` can be split over ``mesh``."""
     if len(shape) != 3:
-        msg = f"jaxweb works on 3D fields, got shape {shape}"
+        msg = f"giggammf works on 3D fields, got shape {shape}"
         raise ValueError(msg)
     nx, ny, nz = shape
     n_dev = mesh.shape[AXIS]

@@ -41,7 +41,7 @@ from .mesh import (
 CLUSTER, FILAMENT, WALL, VOID = 1, 2, 3, 4
 
 # Per-clump δ statistics a clump's virialization can be judged by, and the
-# ``labels.clump_sums`` each needs. jaxweb uses the max, PyCosmoMMF the mean.
+# ``labels.clump_sums`` each needs. giggammf uses the max, PyCosmoMMF the mean.
 CLUMP_STATISTICS = {
     "mean": ("count", "delta"),
     "mass_weighted": ("mass", "mass_delta"),
@@ -271,7 +271,7 @@ def tag_structures(
             ``overdensity_threshold`` in step 1, one of ``CLUMP_STATISTICS``:
             ``"max"`` (the default), ``"mean"`` (PyCosmoMMF's),
             ``"mass_weighted"`` or ``"median"``; see ``virialized_clumps``.
-        mesh: the device mesh; default ``jaxweb.make_mesh()``.
+        mesh: the device mesh; default ``giggammf.make_mesh()``.
         verbose: print PyCosmoMMF's report.
 
     Returns:

@@ -5,7 +5,7 @@
 #     python benchmarks/mass_to_density.py ../data/dm_mass_field_L1_m9_DMO_0077.hdf5 \
 #         ../data/dm_density_L1_m9_DMO_0077.npy
 # Needs a conda environment with `pip install -e ".[gpu]"`; set its path at `conda activate` below.
-#SBATCH --job-name=jaxweb
+#SBATCH --job-name=giggammf
 #SBATCH --account=jdunkley
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1

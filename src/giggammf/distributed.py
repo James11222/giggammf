@@ -1,7 +1,7 @@
 """Small host-side exchanges between the processes of a multi-process (multi-node) job.
 
 A multi-node job runs one controller process per node or per GPU (see
-``jaxweb.initialize``). Fields only ever move between devices through XLA
+``giggammf.initialize``). Fields only ever move between devices through XLA
 collectives inside the jitted steps. The helpers here move the small host-side
 results that the processes must agree on (clump tables, voxel counts, flags).
 

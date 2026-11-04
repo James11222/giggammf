@@ -157,14 +157,14 @@ def maximum_signature(
 
     Args:
         density: 3D δ+1 = ρ/⟨ρ⟩ field of a periodic box, a NumPy array or an
-            x-sharded JAX array (see ``jaxweb.load_density``). Converted to
+            x-sharded JAX array (see ``giggammf.load_density``). Converted to
             float32.
         Rs: smoothing scales in voxels, e.g. ``[2 ** (n / 2) for n in range(9)]``.
         algorithm: ``"NEXUS"`` (Gaussian smoothing of ρ) or ``"NEXUSPLUS"``
             (Gaussian smoothing of log10 ρ, which needs ρ > 0).
-        mesh: the device mesh; default ``jaxweb.make_mesh()`` over every device.
+        mesh: the device mesh; default ``giggammf.make_mesh()`` over every device.
         floor: NEXUS+ only. ρ is clipped to at least ``floor`` before log10.
-            ``None`` (default) uses ``jaxweb.density_floor``: a tenth of the
+            ``None`` (default) uses ``giggammf.density_floor``: a tenth of the
             1% quantile of the positive voxels, so empty voxels sit just
             below the occupied ones instead of many decades below.
         chunk_elements: elements per chunk in the chunked loops; lower it to

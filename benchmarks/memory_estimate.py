@@ -1,5 +1,5 @@
 """
-Per-device memory of one jaxweb scale step, from XLA's buffer assignment.
+Per-device memory of one giggammf scale step, from XLA's buffer assignment.
 
 Compiles the step for abstract inputs (nothing is allocated), so it runs on
 a laptop for any grid size. Use simulated devices to model a GPU node:
@@ -22,9 +22,9 @@ import argparse
 import jax
 import jax.numpy as jnp
 
-import jaxweb
-from jaxweb.mesh import CHUNK_ELEMENTS, kspace_sharding, real_sharding, sig_sharding
-from jaxweb.signatures import _make_base, _make_loggauss_step, _make_signature_step
+import giggammf
+from giggammf.mesh import CHUNK_ELEMENTS, kspace_sharding, real_sharding, sig_sharding
+from giggammf.signatures import _make_base, _make_loggauss_step, _make_signature_step
 
 GiB = 2**30
 
@@ -47,7 +47,7 @@ def main():
     parser.add_argument("--chunk-elements", type=int, default=CHUNK_ELEMENTS)
     args = parser.parse_args()
 
-    mesh = jaxweb.make_mesh()
+    mesh = giggammf.make_mesh()
     n, n_dev = args.n, len(jax.devices())
     chunk = args.chunk_elements
     shape = (n, n, n)

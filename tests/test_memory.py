@@ -4,7 +4,7 @@ XLA's buffer assignment for the compiled steps, at 256³ on 4 devices with the
 chunking scaled so the loops run as many chunks as at 2048³. The numbers are
 in field slabs (one float32 x-slab per device). Run under ``JAX_PLATFORMS=cuda``
 on a 4-GPU node they check the GPU compiler, whose transposes are what broke
-the budget before (see ``jaxweb.fft._row_major``).
+the budget before (see ``giggammf.fft._row_major``).
 
 At 2048³ on 4× A100 80 GB the measured peak is 65.3 GiB (~8.2 slabs) for
 both NEXUS and NEXUS+ (with the log-spectrum offloaded), with the caller
@@ -17,8 +17,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jaxweb.mesh import kspace_sharding, real_sharding, sig_sharding
-from jaxweb.signatures import _make_base, _make_loggauss_step, _make_signature_step
+from giggammf.mesh import kspace_sharding, real_sharding, sig_sharding
+from giggammf.signatures import _make_base, _make_loggauss_step, _make_signature_step
 
 N = 256
 CHUNK = N * N  # one x-plane / one k_y column per chunk, 64 chunks per device

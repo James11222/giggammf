@@ -1,4 +1,4 @@
-"""jaxweb split over several processes, as on several nodes.
+"""giggammf split over several processes, as on several nodes.
 
 Two processes with two simulated CPU devices each run ``multiprocess_worker.py``
 on one mesh of 4 devices, talking through JAX's distributed runtime (gloo on
@@ -21,9 +21,9 @@ import pytest
 from cubes import lognormal_cube
 from multiprocess_worker import RS, SUMMARY_KEYS, clump_problem
 
-import jaxweb
-from jaxweb.labels import SUMS, clump_sums
-from jaxweb.mesh import slurm_local_device_ids
+import giggammf
+from giggammf.labels import SUMS, clump_sums
+from giggammf.mesh import slurm_local_device_ids
 
 skimage_measure = pytest.importorskip("skimage.measure")
 
@@ -90,7 +90,7 @@ def test_layout(run):
 
 def test_density_floor_matches(mesh, run, rho):
     results, _ = run
-    assert results["floor"] == jaxweb.density_floor(rho, mesh)
+    assert results["floor"] == giggammf.density_floor(rho, mesh)
 
 
 @pytest.mark.parametrize(
@@ -103,7 +103,7 @@ def test_density_floor_matches(mesh, run, rho):
 )
 def test_signatures_match(mesh, run, rho, key, algorithm, Rs):
     results, _ = run
-    want = np.asarray(jaxweb.maximum_signature(rho, Rs, algorithm=algorithm, mesh=mesh))
+    want = np.asarray(giggammf.maximum_signature(rho, Rs, algorithm=algorithm, mesh=mesh))
     if algorithm == "NEXUS":
         np.testing.assert_array_equal(results[key], want)
         return
@@ -116,12 +116,12 @@ def test_signatures_match(mesh, run, rho, key, algorithm, Rs):
 @pytest.mark.parametrize("statistic", ["mean", "max"])
 def test_tagging_matches(mesh, run, rho, statistic):
     results, summaries = run
-    sigmax = jaxweb.maximum_signature(rho, RS, mesh=mesh)
-    structure, summary = jaxweb.tag_structures(
+    sigmax = giggammf.maximum_signature(rho, RS, mesh=mesh)
+    structure, summary = giggammf.tag_structures(
         rho, sigmax, overdensity_threshold=20, clump_statistic=statistic, mesh=mesh
     )
     np.testing.assert_array_equal(results[f"structure_{statistic}"], np.asarray(structure))
-    assert np.any(results[f"structure_{statistic}"] == jaxweb.CLUSTER)
+    assert np.any(results[f"structure_{statistic}"] == giggammf.CLUSTER)
     for key in SUMMARY_KEYS:
         # Masses are float32 psums, added up in another order across processes.
         np.testing.assert_allclose(
@@ -155,7 +155,7 @@ def test_clumps_join_across_processes(mesh, run, monkeypatch):
     assert len(got) == n
     np.testing.assert_array_equal(rows(got), rows(want))
     # The same pieces in one process give the same clumps.
-    monkeypatch.setattr(jaxweb.labels, "LABEL_ELEMENTS", 2 * 24 * 20)
+    monkeypatch.setattr(giggammf.labels, "LABEL_ELEMENTS", 2 * 24 * 20)
     single = clump_sums(mask, rho_int, mesh, SUMS, 19.5)
     np.testing.assert_array_equal(rows(np.stack([single[s] for s in SUMS], 1)), rows(got))
 

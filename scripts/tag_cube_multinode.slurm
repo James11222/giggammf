@@ -15,7 +15,7 @@
 # GPUs than Della's gpu-short QoS allows one user, 24):
 #     sbatch --nodes=8 scripts/tag_cube_multinode.slurm ../data/dm_density_L1_m9_DMO_0077.npy \
 #         --tile 2 --no-save
-#SBATCH --job-name=jaxweb-multinode
+#SBATCH --job-name=giggammf-multinode
 #SBATCH --account=jdunkley
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=4
@@ -46,5 +46,5 @@ export XLA_PYTHON_CLIENT_ALLOCATOR=cuda_async
 export NCCL_DEBUG=WARN
 
 nvidia-smi --query-gpu=name,memory.total --format=csv
-# Every task joins one JAX job (jaxweb.initialize) and drives its own GPU.
+# Every task joins one JAX job (giggammf.initialize) and drives its own GPU.
 srun python scripts/tag_cube.py "$density" "$@"

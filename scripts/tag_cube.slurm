@@ -6,7 +6,7 @@
 # All four clump statistics in one job, from the same signatures:
 #     sbatch scripts/tag_cube.slurm ../data/dm_density_L1_m9_DMO_0077.npy \
 #         --out-dir ../data/clump_statistics --clump-statistic mean mass_weighted median max
-#SBATCH --job-name=jaxweb-tag
+#SBATCH --job-name=giggammf-tag
 #SBATCH --account=jdunkley
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1

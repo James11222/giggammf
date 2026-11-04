@@ -156,27 +156,38 @@ def maximum_signature(
     Maximum cluster, filament and wall signatures over the smoothing scales ``Rs``.
 
     Args:
-        density: 3D δ+1 = ρ/⟨ρ⟩ field of a periodic box, a NumPy array or an
-            x-sharded JAX array (see ``giggammf.load_density``). Converted to
-            float32.
-        Rs: smoothing scales in voxels, e.g. ``[2 ** (n / 2) for n in range(9)]``.
-        algorithm: ``"NEXUS"`` (Gaussian smoothing of ρ) or ``"NEXUSPLUS"``
-            (Gaussian smoothing of log10 ρ, which needs ρ > 0).
-        mesh: the device mesh; default ``giggammf.make_mesh()`` over every device.
-        floor: NEXUS+ only. ρ is clipped to at least ``floor`` before log10.
+        density (:obj:`3D float np.ndarray` or :obj:`jax.Array`):
+            The δ+1 = ρ/⟨ρ⟩ field of a periodic box, a NumPy array or an
+            x-sharded JAX array (see ``giggammf.load_density``). It is
+            converted to float32.
+        Rs (:obj:`list` of :obj:`float`):
+            Smoothing scales in voxels, e.g. ``[2 ** (n / 2) for n in range(9)]``.
+        algorithm (:obj:`str`, optional):
+            ``"NEXUS"`` (Gaussian smoothing of ρ) or ``"NEXUSPLUS"`` (Gaussian
+            smoothing of log10 ρ, which needs ρ > 0). Defaults to
+            ``"NEXUSPLUS"``.
+        mesh (:obj:`jax.sharding.Mesh`, optional):
+            The device mesh. Defaults to ``giggammf.make_mesh()`` over every
+            device.
+        floor (:obj:`float`, optional):
+            NEXUS+ only. ρ is clipped to at least ``floor`` before log10.
             ``None`` (default) uses ``giggammf.density_floor``: a tenth of the
             1% quantile of the positive voxels, so empty voxels sit just
             below the occupied ones instead of many decades below.
-        chunk_elements: elements per chunk in the chunked loops; lower it to
-            trade speed for memory.
-        offload: NEXUS+ only. ``True`` keeps the spectrum of log10 ρ in pinned
+        chunk_elements (:obj:`int`, optional):
+            Elements per chunk in the chunked loops; lower it to trade speed
+            for memory. Defaults to ``CHUNK_ELEMENTS`` (2^25).
+        offload (:obj:`bool`, optional):
+            NEXUS+ only. ``True`` keeps the spectrum of log10 ρ in pinned
             host memory and copies it to the devices once per scale, saving
             one field slab of device memory per device for a host-device copy
             per scale. ``None`` (default) decides from the device memory.
 
     Returns:
-        float32 JAX array ``(3, nx, ny, nz)``, sharded along x: the cluster,
-        filament and wall signatures, in that order.
+        (:obj:`4D float32 jax.Array`):
+            An array of signatures with shape ``(3, nx, ny, nz)``, sharded
+            along x. The first dimension holds the cluster, filament and wall
+            signatures, in that order.
     """
     from .mesh import make_mesh
 
@@ -235,8 +246,16 @@ def maximum_signature(
 
 def to_pycosmommf_layout(sigmax):
     """
-    ``(3, nx, ny, nz)`` signatures as a NumPy ``(nx, ny, nz, 3)`` array, whole
-    on every process (small grids only).
+    Convert signatures to PyCosmoMMF's layout, whole on every process (small
+    grids only).
+
+    Args:
+        sigmax (:obj:`4D float32 jax.Array`):
+            The ``(3, nx, ny, nz)`` signatures from ``maximum_signature``.
+
+    Returns:
+        (:obj:`4D float32 np.ndarray`):
+            The signatures as a NumPy ``(nx, ny, nz, 3)`` array.
     """
     return np.moveaxis(to_numpy(sigmax), 0, -1)
 

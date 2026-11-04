@@ -66,6 +66,20 @@ def density_floor(density, mesh, quantile=FLOOR_QUANTILE, factor=FLOOR_FACTOR):
     The quantile is exact (NumPy's ``method="inverted_cdf"``): a bisection on
     the float32 bit patterns, whose order is that of the positive floats, with
     one chunked counting pass over the cube per step (31 steps).
+
+    Args:
+        density (:obj:`3D float np.ndarray` or :obj:`jax.Array`):
+            The δ+1 = ρ/⟨ρ⟩ field.
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+        quantile (:obj:`float`, optional):
+            The quantile of the positive voxels. Defaults to ``0.01``.
+        factor (:obj:`float`, optional):
+            The factor the quantile is multiplied by. Defaults to ``0.1``.
+
+    Returns:
+        (:obj:`float32`):
+            The density floor.
     """
     check_shape(density.shape, mesh)
     rho = as_sharded(density, real_sharding(mesh), jnp.float32)
@@ -91,7 +105,25 @@ def density_floor(density, mesh, quantile=FLOOR_QUANTILE, factor=FLOOR_FACTOR):
 
 
 def gaussian(kx_index, ky_index, kz_index, shape, R):
-    """``exp(-k² R² / 2)`` on the given FFT indices (broadcast), float32."""
+    """
+    The Gaussian filter ``exp(-k² R² / 2)`` on the given FFT indices.
+
+    Args:
+        kx_index (:obj:`jax.Array`):
+            Integer FFT indices along x.
+        ky_index (:obj:`jax.Array`):
+            Integer FFT indices along y.
+        kz_index (:obj:`jax.Array`):
+            Integer FFT indices along z (half-spectrum).
+        shape (:obj:`tuple` of :obj:`int`):
+            The real-space shape ``(nx, ny, nz)``.
+        R (:obj:`float`):
+            The smoothing scale in voxels.
+
+    Returns:
+        (:obj:`float32 jax.Array`):
+            The filter, broadcast over the three index arrays.
+    """
     nx, ny, nz = shape
     k2 = (
         wavenumbers(kx_index, nx) ** 2
@@ -102,7 +134,21 @@ def gaussian(kx_index, ky_index, kz_index, shape, R):
 
 
 def local_gaussian_block(spec_shape, shape, R):
-    """The Gaussian filter on this device's whole k-space block."""
+    """
+    The Gaussian filter on this device's whole k-space block.
+
+    Args:
+        spec_shape (:obj:`tuple` of :obj:`int`):
+            The shape ``(nx, ny/P, nz//2+1)`` of the k-space block.
+        shape (:obj:`tuple` of :obj:`int`):
+            The real-space shape ``(nx, ny, nz)``.
+        R (:obj:`float`):
+            The smoothing scale in voxels.
+
+    Returns:
+        (:obj:`3D float32 jax.Array`):
+            The filter, of shape ``spec_shape``.
+    """
     nx, ny_local, nzh = spec_shape
     return gaussian(
         jnp.arange(nx)[:, None, None],
@@ -126,6 +172,23 @@ def local_loggauss_spectrum(log_spec, total, R, shape, chunk_elements=CHUNK_ELEM
     renormalisation (linear) in k-space, so neither the smoothed log field
     nor the real field is ever stored: one spectrum-sized buffer besides
     the input and the output.
+
+    Args:
+        log_spec (:obj:`3D complex64 jax.Array`):
+            This device's k-space block of ``log10(ρ)``.
+        total (:obj:`float`):
+            The sum of ρ.
+        R (:obj:`float`):
+            The smoothing scale in voxels.
+        shape (:obj:`tuple` of :obj:`int`):
+            The real-space shape ``(nx, ny, nz)``.
+        chunk_elements (:obj:`int`, optional):
+            Elements per chunk in the chunked loops. Defaults to
+            ``CHUNK_ELEMENTS``.
+
+    Returns:
+        (:obj:`3D complex64 jax.Array`):
+            This device's k-space block of the smoothed field.
     """
     b = local_inverse_x(
         log_spec,
@@ -141,7 +204,23 @@ def local_loggauss_spectrum(log_spec, total, R, shape, chunk_elements=CHUNK_ELEM
 
 
 def resolve_floor(density, mesh, algorithm, floor):
-    """The float32 floor for ``algorithm``: ``density_floor`` if ``floor`` is None, 0 for NEXUS."""
+    """
+    The density floor for ``algorithm``.
+
+    Args:
+        density (:obj:`3D float jax.Array`):
+            The δ+1 = ρ/⟨ρ⟩ field.
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+        algorithm (:obj:`str`):
+            ``"NEXUS"`` or ``"NEXUSPLUS"``.
+        floor (:obj:`float`):
+            The floor to use, or ``None``.
+
+    Returns:
+        (:obj:`float32`):
+            ``floor``; ``density_floor`` if ``floor`` is ``None``; 0 for NEXUS.
+    """
     if algorithm != NEXUSPLUS:
         return jnp.float32(0.0)
     return jnp.float32(density_floor(density, mesh) if floor is None else floor)
@@ -149,12 +228,29 @@ def resolve_floor(density, mesh, algorithm, floor):
 
 def smooth(density, R, mesh, algorithm=NEXUSPLUS, floor=None):
     """
-    The smoothed real-space field at scale ``R`` (voxels), x-sharded.
+    The smoothed real-space field at scale ``R``.
 
     ``NEXUS`` smooths ρ with a Gaussian, ``NEXUSPLUS`` smooths log10(ρ),
     with ρ clipped to at least ``floor`` (default ``density_floor``), and
     renormalises the mass. Mainly for checks and plots:
     ``maximum_signature`` never builds this field for NEXUS.
+
+    Args:
+        density (:obj:`3D float np.ndarray` or :obj:`jax.Array`):
+            The δ+1 = ρ/⟨ρ⟩ field.
+        R (:obj:`float`):
+            The smoothing scale in voxels.
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+        algorithm (:obj:`str`, optional):
+            ``"NEXUS"`` or ``"NEXUSPLUS"``. Defaults to ``"NEXUSPLUS"``.
+        floor (:obj:`float`, optional):
+            NEXUS+ only. ρ is clipped to at least ``floor``. Defaults to
+            ``density_floor``.
+
+    Returns:
+        (:obj:`3D float32 jax.Array`):
+            The smoothed field, x-sharded.
     """
     check_shape(density.shape, mesh)
     shape = density.shape

@@ -38,14 +38,32 @@ def local_hessian_spectra(spec, R, shape, n_dev, n_chunks, smooth=False):
     """
     The x-transformed pieces of the Hessian for this device.
 
-    ``spec`` is the k-space block ``(nx, ny/P, nz//2+1)`` of the field to
-    differentiate. With ``smooth=True`` the Gaussian filter of radius ``R`` is
-    applied on the fly (NEXUS), so the smoothed spectrum is never stored.
+    Args:
+        spec (:obj:`3D complex64 jax.Array`):
+            The k-space block ``(nx, ny/P, nz//2+1)`` of the field to
+            differentiate.
+        R (:obj:`float`):
+            The smoothing scale in voxels.
+        shape (:obj:`tuple` of :obj:`int`):
+            The real-space shape ``(nx, ny, nz)``.
+        n_dev (:obj:`int`):
+            The number of devices on the mesh axis.
+        n_chunks (:obj:`int`):
+            The number of chunks of k_y columns (see
+            ``fft.local_partial_inverse_x``).
+        smooth (:obj:`bool`, optional):
+            With ``True`` the Gaussian filter of radius ``R`` is applied on the
+            fly (NEXUS), so the smoothed spectrum is never stored. Defaults to
+            ``False``.
 
-    Returns ``(g, nyquist_plane)``: ``g`` stacks g_0, g_1, g_2 as x-slabs
-    ``(3, nx/P, ny, nz//2+1)`` (``g_1`` without its k_x-Nyquist part) and the
-    ``(ny, nz//2+1)`` plane ``-R² W f̂ k_x''`` at k_x = n_x/2, divided by n_x
-    and gathered from all devices.
+    Returns:
+        The tuple ``(g, nyquist_plane)``:
+            - **g** (:obj:`4D complex64 jax.Array`): g_0, g_1, g_2 stacked as
+              x-slabs ``(3, nx/P, ny, nz//2+1)`` (``g_1`` without its
+              k_x-Nyquist part)
+            - **nyquist_plane** (:obj:`2D complex64 jax.Array`): the
+              ``(ny, nz//2+1)`` plane ``-R² W f̂ k_x''`` at k_x = n_x/2,
+              divided by n_x and gathered from all devices
     """
     nx = shape[0]
     minus_R2 = -R * R
@@ -84,8 +102,22 @@ def local_hessian_spectra(spec, R, shape, n_dev, n_chunks, smooth=False):
 
 def hessian_from_spectra(g, nyquist_plane, x_start, shape):
     """
-    The six real Hessian components ``(xx, xy, xz, yy, yz, zz)`` of the
-    x-planes ``x_start, x_start + 1, ...`` held in the chunk ``g`` (3, planes, ny, nz//2+1).
+    The six real Hessian components of a few x-planes.
+
+    Args:
+        g (:obj:`4D complex64 jax.Array`):
+            A chunk ``(3, planes, ny, nz//2+1)`` of the ``g`` from
+            ``local_hessian_spectra``.
+        nyquist_plane (:obj:`2D complex64 jax.Array`):
+            The ``nyquist_plane`` from ``local_hessian_spectra``.
+        x_start (:obj:`int`):
+            The global x index of the first plane of the chunk.
+        shape (:obj:`tuple` of :obj:`int`):
+            The real-space shape ``(nx, ny, nz)``.
+
+    Returns:
+        The tuple ``(xx, xy, xz, yy, yz, zz)`` of :obj:`3D float32 jax.Array`,
+        each ``(planes, ny, nz)``, for the x-planes ``x_start, x_start + 1, ...``.
     """
     g0, g1, g2 = g[0], g[1], g[2]
     _, ny, nz = shape
@@ -115,12 +147,27 @@ def hessian_from_spectra(g, nyquist_plane, x_start, shape):
 
 def hessian(density, R, mesh, algorithm=NEXUS, floor=None):
     """
-    The six Hessian components of the field smoothed at scale ``R``, each
-    x-sharded ``(nx, ny, nz)``, stacked as ``(6, nx, ny, nz)``. ``floor`` as
-    in ``smooth``.
+    The six Hessian components of the field smoothed at scale ``R``.
 
     For checks on small grids only: it holds all six components at once,
     which ``maximum_signature`` never does.
+
+    Args:
+        density (:obj:`3D float np.ndarray` or :obj:`jax.Array`):
+            The δ+1 = ρ/⟨ρ⟩ field.
+        R (:obj:`float`):
+            The smoothing scale in voxels.
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+        algorithm (:obj:`str`, optional):
+            ``"NEXUS"`` or ``"NEXUSPLUS"``. Defaults to ``"NEXUS"``.
+        floor (:obj:`float`, optional):
+            As in ``smooth``.
+
+    Returns:
+        (:obj:`4D float32 jax.Array`):
+            The components ``(xx, xy, xz, yy, yz, zz)``, each x-sharded
+            ``(nx, ny, nz)``, stacked as ``(6, nx, ny, nz)``.
     """
     check_shape(density.shape, mesh)
     shape = density.shape

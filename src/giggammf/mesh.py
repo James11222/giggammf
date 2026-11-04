@@ -49,6 +49,11 @@ def initialize(**kwargs):
     both work: ``srun`` with ``--ntasks-per-node`` equal to
     ``--gpus-per-node``, or with ``--ntasks-per-node=1``. Pass
     ``local_device_ids`` to choose yourself.
+
+    Args:
+        **kwargs:
+            Passed on to ``jax.distributed.initialize``. Any keyword also
+            starts the runtime with a single process.
     """
     n_tasks = max(int(os.environ.get(name, "1")) for name in _MULTI_PROCESS_ENV)
     if n_tasks <= 1 and not kwargs:
@@ -74,8 +79,7 @@ def _tasks_on_node(environ):
 
 def slurm_local_device_ids(environ):
     """
-    The GPUs (ids among those it can see) a SLURM task should drive, or
-    ``None`` outside a SLURM task with GPUs, to keep JAX's default.
+    The GPUs a SLURM task should drive.
 
     JAX's default gives each task the one GPU numbered by its ``SLURM_LOCALID``.
     That is right for one task per GPU when every task sees all the GPUs of its
@@ -83,6 +87,16 @@ def slurm_local_device_ids(environ):
     SLURM binds GPUs to tasks (``--gpus-per-task``) that GPU may not exist.
     Here the GPUs a task sees are split evenly between the tasks on its node,
     unless SLURM bound them to tasks: then each task drives all it sees.
+
+    Args:
+        environ (:obj:`dict`):
+            The environment variables, e.g. ``os.environ``.
+
+    Returns:
+        (:obj:`list` of :obj:`int`):
+            The ids, among the GPUs the task can see, of the GPUs it should
+            drive; ``None`` outside a SLURM task with GPUs, to keep JAX's
+            default.
     """
     visible = environ.get("CUDA_VISIBLE_DEVICES", "")
     if "SLURM_LOCALID" not in environ or not visible:
@@ -103,7 +117,17 @@ def slurm_local_device_ids(environ):
 
 
 def make_mesh(devices=None):
-    """A 1D ``Mesh`` over ``devices`` (default: every device of every process)."""
+    """
+    The 1D device mesh, with one axis ``"x"``.
+
+    Args:
+        devices (:obj:`list` of :obj:`jax.Device`, optional):
+            The devices of the mesh. Defaults to every device of every process.
+
+    Returns:
+        (:obj:`jax.sharding.Mesh`):
+            A 1D ``Mesh`` over ``devices``, sorted by process then device id.
+    """
     devices = jax.devices() if devices is None else list(devices)
     # Not jax.make_mesh: on GPUs every node is a separate "slice", which it
     # refuses. Each process's slabs are kept consecutive along x, so most
@@ -115,19 +139,64 @@ def make_mesh(devices=None):
 
 
 def real_sharding(mesh):
+    """
+    The sharding of real-space fields.
+
+    Args:
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+
+    Returns:
+        (:obj:`jax.sharding.NamedSharding`):
+            ``(nx, ny, nz)`` fields split along x (``REAL_SPEC``).
+    """
     return NamedSharding(mesh, REAL_SPEC)
 
 
 def kspace_sharding(mesh):
+    """
+    The sharding of k-space fields.
+
+    Args:
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+
+    Returns:
+        (:obj:`jax.sharding.NamedSharding`):
+            ``(nx, ny, nz // 2 + 1)`` half-spectra split along k_y
+            (``KSPACE_SPEC``).
+    """
     return NamedSharding(mesh, KSPACE_SPEC)
 
 
 def sig_sharding(mesh):
+    """
+    The sharding of signature arrays.
+
+    Args:
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+
+    Returns:
+        (:obj:`jax.sharding.NamedSharding`):
+            ``(3, nx, ny, nz)`` arrays split along x (``SIG_SPEC``).
+    """
     return NamedSharding(mesh, SIG_SPEC)
 
 
 def check_shape(shape, mesh):
-    """Raise ``ValueError`` unless a cube of ``shape`` can be split over ``mesh``."""
+    """
+    Raise ``ValueError`` unless a cube of ``shape`` can be split over ``mesh``.
+
+    ``nx`` and ``ny`` must be divisible by the number of devices, and ``nz``
+    must be even.
+
+    Args:
+        shape (:obj:`tuple` of :obj:`int`):
+            The shape ``(nx, ny, nz)`` of the cube.
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+    """
     if len(shape) != 3:
         msg = f"giggammf works on 3D fields, got shape {shape}"
         raise ValueError(msg)
@@ -146,8 +215,22 @@ def check_shape(shape, mesh):
 
 def as_sharded(x, sharding, dtype):
     """
-    ``x`` as a JAX array of ``dtype`` with ``sharding``. NumPy input is split
-    on the host and sent slab by slab, never staged whole on one device.
+    Convert ``x`` to a sharded JAX array.
+
+    NumPy input is split on the host and sent slab by slab, never staged
+    whole on one device.
+
+    Args:
+        x (:obj:`np.ndarray` or :obj:`jax.Array`):
+            The array to convert.
+        sharding (:obj:`jax.sharding.NamedSharding`):
+            The sharding of the result.
+        dtype (:obj:`numpy.dtype`):
+            The dtype of the result.
+
+    Returns:
+        (:obj:`jax.Array`):
+            ``x`` as a JAX array of ``dtype`` with ``sharding``.
     """
     if isinstance(x, jax.Array):
         return jax.device_put(x.astype(dtype), sharding)

@@ -10,7 +10,7 @@ arrays: the same thresholds, the same selection rules and the same uint8
    largest δ exceeds ``overdensity_threshold``; PyCosmoMMF uses the mean δ
    (``clump_statistic="mean"``; see ``virialized_clumps``).
 2. Filaments, then walls: the enclosed mass M(𝒮) over a log10 𝒮 grid, and
-   the threshold at the peak of |dM²/dlog 𝒮|.
+   the threshold at the peak of ``|dM²/dlog 𝒮|``.
 """
 
 from __future__ import annotations
@@ -55,22 +55,58 @@ CLUMP_STATISTICS = {
 
 def cluster_signature_thresholds(smax=60.0, n=20):
     """
-    The float32 cluster-signature thresholds scanned for clusters: ``n``
-    log-spaced values from 0.1 to ``smax``. PyCosmoMMF uses ``smax=30, n=10``;
-    the default is twice as fine and reaches twice as high.
+    The cluster-signature thresholds scanned for clusters.
+
+    PyCosmoMMF uses ``smax=30, n=10``; the default is twice as fine and
+    reaches twice as high.
+
+    Args:
+        smax (:obj:`float`, optional):
+            The largest threshold. Defaults to ``60.0``.
+        n (:obj:`int`, optional):
+            The number of thresholds. Defaults to ``20``.
+
+    Returns:
+        (:obj:`1D float32 np.ndarray`):
+            ``n`` log-spaced values from 0.1 to ``smax``.
     """
     return np.geomspace(0.1, smax, n, dtype=np.float32)
 
 
 def virialized_fraction(n_virialized, n_clumps):
-    """Fraction of clumps that are virialized, as float32; NaN if there are no clumps."""
+    """
+    Fraction of clumps that are virialized.
+
+    Args:
+        n_virialized (:obj:`int`):
+            The number of virialized clumps.
+        n_clumps (:obj:`int`):
+            The number of clumps.
+
+    Returns:
+        (:obj:`float32`):
+            ``n_virialized / n_clumps``; NaN if there are no clumps.
+    """
     if n_clumps == 0:
         return np.float32(np.nan)
     return np.float32(n_virialized) / np.float32(n_clumps)
 
 
 def select_cluster_threshold(signature_thresholds, virialized_fractions):
-    """The threshold whose virialized fraction is closest to 0.5; ``None`` if none is virialized."""
+    """
+    The cluster-signature threshold whose virialized fraction is closest to 0.5.
+
+    Args:
+        signature_thresholds (:obj:`1D float32 np.ndarray`):
+            The cluster-signature thresholds scanned.
+        virialized_fractions (:obj:`1D float32 np.ndarray`):
+            The virialized fraction at each threshold.
+
+    Returns:
+        (:obj:`float32`):
+            The selected threshold; ``None`` if no clump is virialized at any
+            threshold.
+    """
     if not np.any(virialized_fractions > 0):
         return None
     distance = np.abs(virialized_fractions - np.float32(0.5))
@@ -78,19 +114,54 @@ def select_cluster_threshold(signature_thresholds, virialized_fractions):
 
 
 def log10S_grid(Smin, Smax):
-    """float32 log10(𝒮) grid: the points of ``np.arange(Smin, Smax + 0.1, 0.1)``."""
+    """
+    The log10(𝒮) grid of the filament and wall mass curves.
+
+    Args:
+        Smin (:obj:`float`):
+            The lower end of the grid.
+        Smax (:obj:`float`):
+            The upper end of the grid.
+
+    Returns:
+        (:obj:`1D float32 np.ndarray`):
+            The points of ``np.arange(Smin, Smax + 0.1, 0.1)``.
+    """
     n = int(np.ceil(round((Smax + 0.1 - Smin) / 0.1, 6)))
     return np.float32(Smin) + np.float32(0.1) * np.arange(n, dtype=np.float32)
 
 
 def mass_change_curve(log10S, M):
-    """``|dM²/dlog(𝒮)|`` at the midpoints of ``log10S``, and 𝒮 at those midpoints."""
+    """
+    The mass change curve ``|dM²/dlog(𝒮)|``.
+
+    Args:
+        log10S (:obj:`1D float32 np.ndarray`):
+            The log10(𝒮) grid, from ``log10S_grid``.
+        M (:obj:`1D float32 np.ndarray`):
+            The enclosed mass at each point of ``log10S``.
+
+    Returns:
+        The tuple ``(S, dM2)``:
+            - **S** (:obj:`1D float32 np.ndarray`): 𝒮 at the midpoints of ``log10S``
+            - **dM2** (:obj:`1D float32 np.ndarray`): ``|dM²/dlog(𝒮)|`` at those midpoints
+    """
     dM2 = np.abs(np.diff(M**2) / np.diff(log10S))
     mid = (log10S[:-1] + log10S[1:]) * np.float32(0.5)
     return np.power(np.float32(10.0), mid), dM2
 
 
 def warn_unresolved_clusters(overdensity_threshold, clump_statistic="mean"):
+    """
+    Print the warning given when no clump is virialized at any
+    cluster-signature threshold.
+
+    Args:
+        overdensity_threshold (:obj:`float`):
+            The overdensity threshold used.
+        clump_statistic (:obj:`str`, optional):
+            The per-clump δ statistic used. Defaults to ``"mean"``.
+    """
     print(
         f"WARNING: no clump has a {clump_statistic} overdensity δ above "
         f"{overdensity_threshold} at any cluster-signature threshold. The "
@@ -107,9 +178,9 @@ def _check_clump_statistic(clump_statistic):
 
 def virialized_clumps(sums, clump_statistic, overdensity_threshold):
     """
-    Boolean per clump: whether its δ statistic exceeds ``overdensity_threshold``,
-    from its ``labels.clump_sums`` (``CLUMP_STATISTICS`` lists the sums each
-    statistic needs, with ``"above"`` counted above ``overdensity_threshold``).
+    Whether each clump's δ statistic exceeds ``overdensity_threshold``.
+
+    The statistics are:
 
     - ``"mean"``: Σδ / N, as PyCosmoMMF.
     - ``"mass_weighted"``: Σρδ / Σρ, never below the mean.
@@ -117,6 +188,20 @@ def virialized_clumps(sums, clump_statistic, overdensity_threshold):
       which exceeds the threshold exactly when more than half the voxels do.
       Usually below the mean in a centrally concentrated clump.
     - ``"max"``: the largest δ, which exceeds it when at least one voxel does.
+
+    Args:
+        sums (:obj:`dict`):
+            The clumps' ``labels.clump_sums``. ``CLUMP_STATISTICS`` lists the
+            sums each statistic needs, with ``"above"`` counted above
+            ``overdensity_threshold``.
+        clump_statistic (:obj:`str`):
+            ``"mean"``, ``"mass_weighted"``, ``"median"`` or ``"max"``.
+        overdensity_threshold (:obj:`float`):
+            The δ the statistic must exceed.
+
+    Returns:
+        (:obj:`1D bool np.ndarray`):
+            One value per clump, ``True`` where the clump is virialized.
     """
     _check_clump_statistic(clump_statistic)
     t = np.float32(overdensity_threshold)
@@ -258,29 +343,57 @@ def tag_structures(
     Tag every voxel as cluster, filament, wall or void.
 
     Args:
-        density: δ+1 = ρ/⟨ρ⟩, NumPy or x-sharded JAX ``(nx, ny, nz)``.
-        sigmax: signatures from ``maximum_signature``, ``(3, nx, ny, nz)``.
-        overdensity_threshold: the δ a clump's ``clump_statistic`` must exceed
-            for it to count as virialized (commonly 370, 200 or 500).
-        Smin, Smax: range of the log10 𝒮 grid for the filament and wall
-            mass curves.
-        clusbool: an optional boolean cluster mask to use instead of step 1.
-        cluster_thresholds: the cluster-signature thresholds scanned in
-            step 1; default ``cluster_signature_thresholds()``.
-        clump_statistic: the per-clump δ statistic compared with
-            ``overdensity_threshold`` in step 1, one of ``CLUMP_STATISTICS``:
-            ``"max"`` (the default), ``"mean"`` (PyCosmoMMF's),
-            ``"mass_weighted"`` or ``"median"``; see ``virialized_clumps``.
-        mesh: the device mesh; default ``giggammf.make_mesh()``.
-        verbose: print PyCosmoMMF's report.
+        density (:obj:`3D float np.ndarray` or :obj:`jax.Array`):
+            The δ+1 = ρ/⟨ρ⟩ field, NumPy or x-sharded JAX ``(nx, ny, nz)``.
+            This is NOT δ = ρ/⟨ρ⟩ - 1.
+        sigmax (:obj:`4D float jax.Array`):
+            The ``(3, nx, ny, nz)`` signatures from ``maximum_signature``.
+        overdensity_threshold (:obj:`float`, optional):
+            The δ a clump's ``clump_statistic`` must exceed for it to count as
+            virialized (commonly 370, 200 or 500). Defaults to ``370``.
+        Smin (:obj:`float`, optional):
+            The lower end of the log10 𝒮 grid for the filament and wall mass
+            curves. Defaults to ``-3``.
+        Smax (:obj:`float`, optional):
+            The upper end of the log10 𝒮 grid for the filament and wall mass
+            curves. Defaults to ``2``.
+        clusbool (:obj:`3D bool np.ndarray` or :obj:`jax.Array`, optional):
+            A boolean cluster mask to use instead of step 1.
+        cluster_thresholds (:obj:`1D float np.ndarray`, optional):
+            The cluster-signature thresholds scanned in step 1. Defaults to
+            ``cluster_signature_thresholds()``.
+        clump_statistic (:obj:`str`, optional):
+            The per-clump δ statistic compared with ``overdensity_threshold``
+            in step 1, one of ``CLUMP_STATISTICS``: ``"max"`` (the default),
+            ``"mean"`` (PyCosmoMMF's), ``"mass_weighted"`` or ``"median"``;
+            see ``virialized_clumps``.
+        mesh (:obj:`jax.sharding.Mesh`, optional):
+            The device mesh. Defaults to ``giggammf.make_mesh()``.
+        verbose (:obj:`bool`, optional):
+            Print PyCosmoMMF's report. Defaults to ``False``.
 
     Returns:
-        ``(structure_filter, summary)``: an x-sharded uint8 array
-        (1 cluster, 2 filament, 3 wall, 4 void) and a dict with the
-        thresholds, curves and volume / mass fractions, using the keys of
-        PyCosmoMMF's ``summary_data``, plus ``"clump_statistic"`` and
-        ``"seconds"``: the wall-clock time of each stage (clusters, filaments,
-        walls, filter).
+        The tuple ``(structure_filter, summary)``:
+            - **structure_filter** (:obj:`3D uint8 jax.Array`): x-sharded, the
+              structure type of every voxel: ``1`` = cluster, ``2`` =
+              filament, ``3`` = wall, ``4`` = void.
+            - **summary** (:obj:`dict`): the thresholds, curves and volume /
+              mass fractions, using the keys of PyCosmoMMF's ``summary_data``,
+              plus ``"clump_statistic"`` and ``"seconds"``:
+
+                - **clump_statistic** (:obj:`str`): the ``clump_statistic`` used
+                - **S_clus_thresh** (:obj:`float32`): the threshold value for clusters (``None`` with ``clusbool``)
+                - **S_clus** (:obj:`1D float32 np.ndarray`): the signature values scanned for clusters (``None`` with ``clusbool``)
+                - **f_vir_clus** (:obj:`1D float32 np.ndarray`): the virialized fraction for clusters (``None`` with ``clusbool``)
+                - **S_fil** (:obj:`1D float32 np.ndarray`): the signature values for filaments
+                - **dM2_fil** (:obj:`1D float32 np.ndarray`): the mass change curve for filaments
+                - **S_fil_thresh** (:obj:`float32`): the threshold value for filaments
+                - **S_wall** (:obj:`1D float32 np.ndarray`): the signature values for walls
+                - **dM2_wall** (:obj:`1D float32 np.ndarray`): the mass change curve for walls
+                - **S_wall_thresh** (:obj:`float32`): the threshold value for walls
+                - **volume_fractions** (:obj:`list` of :obj:`float32`): the volume fraction of clusters, filaments, walls and voids
+                - **mass_fractions** (:obj:`list` of :obj:`float32`): the mass fraction of clusters, filaments, walls and voids
+                - **seconds** (:obj:`dict`): the wall-clock time of each stage (clusters, filaments, walls, filter)
     """
     _check_clump_statistic(clump_statistic)
     mesh = make_mesh() if mesh is None else mesh

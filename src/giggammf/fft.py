@@ -37,6 +37,18 @@ def wavenumbers(index, n, part="full"):
     set to 0, and ``part="nyquist"`` gives only the Nyquist entry (``-π``)
     and 0 elsewhere; the two add up to ``"full"``. The Hessian needs the split
     for its off-diagonal terms (see ``giggammf.hessian``).
+
+    Args:
+        index (:obj:`int` or :obj:`jax.Array`):
+            Integer FFT indices.
+        n (:obj:`int`):
+            The length of the axis.
+        part (:obj:`str`, optional):
+            ``"full"``, ``"odd"`` or ``"nyquist"``. Defaults to ``"full"``.
+
+    Returns:
+        (:obj:`float32 jax.Array`):
+            The wavenumbers, in radians per voxel, of the shape of ``index``.
     """
     index = jnp.asarray(index)
     signed = jnp.where(index >= (n + 1) // 2, index - n, index)
@@ -53,7 +65,21 @@ def wavenumbers(index, n, part="full"):
 
 
 def local_ky_index(ny_local, start=0, size=None):
-    """Global k_y indices of this device's k-space block (or a slice of it)."""
+    """
+    Global k_y indices of this device's k-space block (or a slice of it).
+
+    Args:
+        ny_local (:obj:`int`):
+            The number of k_y columns per device.
+        start (:obj:`int`, optional):
+            The first column of the slice. Defaults to ``0``.
+        size (:obj:`int`, optional):
+            The number of columns of the slice. Defaults to ``ny_local``.
+
+    Returns:
+        (:obj:`1D int32 jax.Array`):
+            The global k_y indices.
+    """
     size = ny_local if size is None else size
     return lax.axis_index(AXIS) * ny_local + start + jnp.arange(size)
 
@@ -71,6 +97,18 @@ def local_rfft3(x, chunk_elements=CHUNK_ELEMENTS, pre=None):
     (z, y) transforms a few x-planes at a time into one buffer, then
     ``local_forward_x``. ``pre``, if given, is applied to each real chunk
     first (``log10``, say), so the transformed field is never stored.
+
+    Args:
+        x (:obj:`3D float32 jax.Array`):
+            This device's real x-slab ``(nx/P, ny, nz)``.
+        chunk_elements (:obj:`int`, optional):
+            Elements per chunk. Defaults to ``CHUNK_ELEMENTS``.
+        pre (:obj:`callable`, optional):
+            A function applied to each real chunk before the transform.
+
+    Returns:
+        (:obj:`3D complex64 jax.Array`):
+            This device's k_y-slab ``(nx, ny/P, nz//2+1)``.
     """
     nx_local, ny, nz = x.shape
     planes = _rows_per_chunk(nx_local, ny * nz, chunk_elements)
@@ -96,6 +134,18 @@ def local_forward_x(a, chunk_elements=CHUNK_ELEMENTS, scale=None):
 
     A few k_y columns at a time: all-to-all, FFT over x, times ``scale`` if
     given, written into the output.
+
+    Args:
+        a (:obj:`3D complex64 jax.Array`):
+            This device's x-slab ``(nx/P, ny, nz//2+1)``, transformed in (y, z).
+        chunk_elements (:obj:`int`, optional):
+            Elements per chunk. Defaults to ``CHUNK_ELEMENTS``.
+        scale (:obj:`float`, optional):
+            A factor applied to the result.
+
+    Returns:
+        (:obj:`3D complex64 jax.Array`):
+            This device's k_y-slab ``(nx, ny/P, nz//2+1)``.
     """
     nx_local, ny, nzh = a.shape
     n_dev = lax.axis_size(AXIS)
@@ -119,9 +169,21 @@ def local_forward_x(a, chunk_elements=CHUNK_ELEMENTS, scale=None):
 
 def local_inverse_x(a, chunk_elements=CHUNK_ELEMENTS, multiplier=None):
     """
-    The first step of ``local_irfft3``: the k_y-slab ``(nx, ny/P, nz//2+1)``,
-    times ``multiplier(kx_index, ky_index, kz_index)`` if given (a filter,
-    say), to an x-slab still spectral in (k_y, k_z), ``(nx/P, ny, nz//2+1)``.
+    The first step of ``local_irfft3``: the inverse transform over x.
+
+    Args:
+        a (:obj:`3D complex64 jax.Array`):
+            This device's k_y-slab ``(nx, ny/P, nz//2+1)``.
+        chunk_elements (:obj:`int`, optional):
+            Elements per chunk. Defaults to ``CHUNK_ELEMENTS``.
+        multiplier (:obj:`callable`, optional):
+            A function ``multiplier(kx_index, ky_index, kz_index)`` whose
+            output is applied to ``a`` first (a filter, say).
+
+    Returns:
+        (:obj:`3D complex64 jax.Array`):
+            This device's x-slab ``(nx/P, ny, nz//2+1)``, still spectral in
+            (k_y, k_z).
     """
     nx, ny_local, nzh = a.shape
     n_dev = lax.axis_size(AXIS)
@@ -140,6 +202,18 @@ def local_irfft3(a, nz, chunk_elements=CHUNK_ELEMENTS):
 
     Chunked like ``local_rfft3``: ``local_inverse_x``, then the (y, z)
     transforms a few x-planes at a time.
+
+    Args:
+        a (:obj:`3D complex64 jax.Array`):
+            This device's k_y-slab ``(nx, ny/P, nz//2+1)``.
+        nz (:obj:`int`):
+            The real-space length of the last axis.
+        chunk_elements (:obj:`int`, optional):
+            Elements per chunk. Defaults to ``CHUNK_ELEMENTS``.
+
+    Returns:
+        (:obj:`3D float32 jax.Array`):
+            This device's real x-slab ``(nx/P, ny, nz)``.
     """
     b = local_inverse_x(a, chunk_elements)
     nx_local, ny, _ = b.shape
@@ -159,11 +233,25 @@ def local_map_real_space(b, nz, fn, chunk_elements=CHUNK_ELEMENTS):
     """
     Apply ``fn`` in real space to an x-slab held spectral in (k_y, k_z).
 
-    ``b`` is ``(nx/P, ny, nz//2+1)`` as made by ``local_inverse_x``. A few
-    x-planes at a time: inverse (y, z) transform, ``fn``, forward (y, z)
+    A few x-planes at a time: inverse (y, z) transform, ``fn``, forward (y, z)
     transform, written back in place, so the real field is never stored.
-    Returns the new x-slab, ready for ``local_forward_x``, and this device's
-    sum of ``fn``'s output.
+
+    Args:
+        b (:obj:`3D complex64 jax.Array`):
+            This device's x-slab ``(nx/P, ny, nz//2+1)`` as made by
+            ``local_inverse_x``.
+        nz (:obj:`int`):
+            The real-space length of the last axis.
+        fn (:obj:`callable`):
+            The function applied in real space.
+        chunk_elements (:obj:`int`, optional):
+            Elements per chunk. Defaults to ``CHUNK_ELEMENTS``.
+
+    Returns:
+        The tuple ``(b, total)``:
+            - **b** (:obj:`3D complex64 jax.Array`): the new x-slab, ready for
+              ``local_forward_x``
+            - **total** (:obj:`float32`): this device's sum of ``fn``'s output
     """
     nx_local, ny, _ = b.shape
     planes = _rows_per_chunk(nx_local, ny * nz, chunk_elements)
@@ -201,21 +289,26 @@ def local_partial_inverse_x(spec, multipliers, n_dev, n_chunks):
     spectral in (k_y, k_z).
 
     Args:
-        spec: this device's k-space block ``(nx, ny/P, nz//2+1)``.
-        multipliers: functions ``m(kx_index, ky_index, kz_index)`` returning
-            the float32 factor to apply, broadcast over the three index
-            arrays (shapes ``(nx,1,1)``, ``(1,c,1)``, ``(1,1,nz//2+1)``;
+        spec (:obj:`3D complex64 jax.Array`):
+            This device's k-space block ``(nx, ny/P, nz//2+1)``.
+        multipliers (:obj:`list` of :obj:`callable`):
+            Functions ``m(kx_index, ky_index, kz_index)`` returning the
+            float32 factor to apply, broadcast over the three index arrays
+            (shapes ``(nx,1,1)``, ``(1,c,1)``, ``(1,1,nz//2+1)``;
             ``ky_index`` holds global k_y indices).
-        n_dev: number of devices on the mesh axis.
-        n_chunks: the k_y columns of the block are processed this many at a
-            time. Each chunk is multiplied, transformed and sent with one
+        n_dev (:obj:`int`):
+            Number of devices on the mesh axis.
+        n_chunks (:obj:`int`):
+            The k_y columns of the block are processed in this many chunks.
+            Each chunk is multiplied, transformed and sent with one
             all-to-all straight into the output buffer, so no full-size
             temporary is made.
 
     Returns:
-        ``(M, nx/P, ny, nz//2+1)`` complex64, one slab per multiplier: x in
-        real space, k_y and k_z spectral. The results share one buffer
-        (separate buffers would make XLA copy a shared zero-initialiser).
+        (:obj:`4D complex64 jax.Array`):
+            ``(M, nx/P, ny, nz//2+1)``, one slab per multiplier: x in real
+            space, k_y and k_z spectral. The results share one buffer
+            (separate buffers would make XLA copy a shared zero-initialiser).
     """
     nx, ny_local, nzh = spec.shape
     nx_local = nx // n_dev
@@ -247,7 +340,21 @@ def local_partial_inverse_x(spec, multipliers, n_dev, n_chunks):
 
 
 def rfft3(x, mesh, chunk_elements=CHUNK_ELEMENTS):
-    """Forward 3D rfft of an x-sharded real field; the result is k_y-sharded."""
+    """
+    Forward 3D rfft of an x-sharded real field.
+
+    Args:
+        x (:obj:`3D float32 jax.Array`):
+            The x-sharded real field ``(nx, ny, nz)``.
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+        chunk_elements (:obj:`int`, optional):
+            Elements per chunk. Defaults to ``CHUNK_ELEMENTS``.
+
+    Returns:
+        (:obj:`3D complex64 jax.Array`):
+            The half-spectrum ``(nx, ny, nz//2+1)``, k_y-sharded.
+    """
     fn = jax.shard_map(
         lambda y: local_rfft3(y, chunk_elements),
         mesh=mesh,
@@ -258,7 +365,23 @@ def rfft3(x, mesh, chunk_elements=CHUNK_ELEMENTS):
 
 
 def irfft3(a, mesh, nz, chunk_elements=CHUNK_ELEMENTS):
-    """Inverse of ``rfft3``; ``nz`` is the real-space length of the last axis."""
+    """
+    Inverse of ``rfft3``.
+
+    Args:
+        a (:obj:`3D complex64 jax.Array`):
+            The k_y-sharded half-spectrum ``(nx, ny, nz//2+1)``.
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh.
+        nz (:obj:`int`):
+            The real-space length of the last axis.
+        chunk_elements (:obj:`int`, optional):
+            Elements per chunk. Defaults to ``CHUNK_ELEMENTS``.
+
+    Returns:
+        (:obj:`3D float32 jax.Array`):
+            The real field ``(nx, ny, nz)``, x-sharded.
+    """
     fn = jax.shard_map(
         lambda b: local_irfft3(b, nz, chunk_elements),
         mesh=mesh,
@@ -269,7 +392,19 @@ def irfft3(a, mesh, nz, chunk_elements=CHUNK_ELEMENTS):
 
 
 def largest_divisor_at_most(n, limit):
-    """The largest divisor of ``n`` that is ``<= limit`` (at least 1)."""
+    """
+    The largest divisor of ``n`` that is ``<= limit``.
+
+    Args:
+        n (:obj:`int`):
+            The number to divide.
+        limit (:obj:`int`):
+            The upper bound.
+
+    Returns:
+        (:obj:`int`):
+            The divisor, at least 1.
+    """
     limit = max(1, int(limit))
     for d in range(min(n, limit), 0, -1):
         if n % d == 0:

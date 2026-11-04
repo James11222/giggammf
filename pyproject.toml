@@ -15,6 +15,13 @@ dependencies = ["jax>=0.7", "numpy", "scipy"]
 [project.optional-dependencies]
 gpu = ["jax[cuda12]>=0.7", "cupy-cuda12x"]
 hdf5 = ["h5py"]
+docs = [
+    "sphinx>=7.0",
+    "myst_parser>=0.13",
+    "sphinx_copybutton",
+    "sphinx_autodoc_typehints",
+    "furo>=2023.08.17",
+]
 # The parity tests need PyCosmoMMF's float32 rewrite, which is newer than the
 # PyPI release (0.0.8), so pin a commit of its main branch.
 test = [

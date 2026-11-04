@@ -209,20 +209,28 @@ def clump_sums(mask, rho, mesh, names=("count", "delta"), threshold=0.0):
     Per-clump sums over every 26-connected clump of ``mask``, across all slabs.
 
     Args:
-        mask: x-sharded boolean or uint8 array ``(nx, ny, nz)``.
-        rho: float32 δ+1 = ρ/⟨ρ⟩, same shape (δ is formed per slab, on the fly).
-        mesh: the device mesh; both arrays are laid out as x-slabs on it.
-        names: which sums to make, from ``SUMS``: ``"count"`` (voxels),
+        mask (:obj:`3D bool jax.Array`):
+            x-sharded boolean or uint8 array ``(nx, ny, nz)``.
+        rho (:obj:`3D float32 jax.Array`):
+            δ+1 = ρ/⟨ρ⟩, same shape (δ is formed per slab, on the fly).
+        mesh (:obj:`jax.sharding.Mesh`):
+            The device mesh; both arrays are laid out as x-slabs on it.
+        names (:obj:`tuple` of :obj:`str`, optional):
+            Which sums to make, from ``SUMS``: ``"count"`` (voxels),
             ``"delta"`` (Σδ), ``"mass"`` (Σρ), ``"mass_delta"`` (Σρδ) and
-            ``"above"`` (voxels with δ > ``threshold``).
-        threshold: the δ threshold of ``"above"``.
+            ``"above"`` (voxels with δ > ``threshold``). Defaults to
+            ``("count", "delta")``.
+        threshold (:obj:`float`, optional):
+            The δ threshold of ``"above"``. Defaults to ``0.0``.
 
     Returns:
-        A dict of NumPy arrays, one value per clump, the clumps in the same
-        (arbitrary) order in every array: float32 sums, int64 counts. With
-        several processes, each process returns its own share of the clumps
-        and each clump is in exactly one share, so totals over clumps need a
-        sum over processes (``distributed.process_sum``).
+        (:obj:`dict`):
+            A dict of NumPy arrays keyed by ``names``, one value per clump,
+            the clumps in the same (arbitrary) order in every array: float32
+            sums, int64 counts. With several processes, each process returns
+            its own share of the clumps and each clump is in exactly one
+            share, so totals over clumps need a sum over processes
+            (``distributed.process_sum``).
     """
     mask = as_sharded(mask, real_sharding(mesh), jnp.uint8)
     rho = as_sharded(rho, real_sharding(mesh), jnp.float32)

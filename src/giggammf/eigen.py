@@ -9,7 +9,7 @@ import jax.numpy as jnp
 
 def eigvalsh_3x3_sym(a, b, c, d, e, f):
     """
-    Sorted eigenvalues ``(e1 <= e2 <= e3)`` of the symmetric matrices
+    Sorted eigenvalues ``(e1 <= e2 <= e3)`` of the symmetric matrices::
 
         [[a, b, c],
          [b, d, e],
@@ -19,6 +19,14 @@ def eigvalsh_3x3_sym(a, b, c, d, e, f):
     Smith (1961), Communications of the ACM 4, 168, in float32. It is the
     same solver, with the same max-abs rescaling, as PyCosmoMMF's
     ``_eigvalsh_3x3_sym``, so the two codes agree to float32 rounding.
+
+    Args:
+        a, b, c, d, e, f (:obj:`float jax.Array`):
+            The six independent entries of the matrices, all of one shape.
+
+    Returns:
+        The tuple ``(e1, e2, e3)`` of :obj:`float32 jax.Array`, each of the
+        shape of the entries.
     """
     scale = jnp.maximum(
         jnp.maximum(jnp.maximum(jnp.abs(a), jnp.abs(d)), jnp.maximum(jnp.abs(f), jnp.abs(b))),
@@ -66,10 +74,18 @@ def _pos_part(x):
 def signatures_from_eigenvalues(e1, e2, e3):
     """
     Cluster, filament and wall signatures from sorted eigenvalues
-    ``e1 <= e2 <= e3`` (Cautun et al. 2013, eq. 7), stacked as ``(3, ...)``.
+    (Cautun et al. 2013, eq. 7).
 
     Same formulas as PyCosmoMMF's ``signatures_from_hessian``; voxels with
     ``e1 == 0`` get zero for all three.
+
+    Args:
+        e1, e2, e3 (:obj:`float jax.Array`):
+            The sorted eigenvalues ``e1 <= e2 <= e3``, all of one shape.
+
+    Returns:
+        (:obj:`float32 jax.Array`):
+            The cluster, filament and wall signatures, stacked as ``(3, ...)``.
     """
     zero_e1 = e1 == 0.0
     safe_e1 = jnp.where(zero_e1, 1.0, e1)

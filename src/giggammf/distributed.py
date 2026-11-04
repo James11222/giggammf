@@ -24,12 +24,21 @@ def _bucket(n):
 
 def allgather(array):
     """
-    ``array`` from every process, concatenated along axis 0 in process order.
+    Gather a small NumPy array from every process.
 
     The arrays may have different lengths, but must have the same dtype and
     trailing shape on every process. They travel as raw bytes, so int64 and
     structured dtypes arrive intact even though JAX runs without x64. Meant
     for small arrays: each one is copied to every device for the gather.
+
+    Args:
+        array (:obj:`np.ndarray`):
+            This process's array.
+
+    Returns:
+        (:obj:`np.ndarray`):
+            ``array`` from every process, concatenated along axis 0 in process
+            order.
     """
     array = np.ascontiguousarray(np.atleast_1d(array))
     if jax.process_count() == 1:
@@ -44,13 +53,33 @@ def allgather(array):
 
 
 def process_sum(values):
-    """Element-wise sum of the NumPy ``values`` (a scalar or 1D array) over all processes."""
+    """
+    Sum NumPy values over all processes.
+
+    Args:
+        values (:obj:`float` or :obj:`1D np.ndarray`):
+            This process's values.
+
+    Returns:
+        (:obj:`1D np.ndarray`):
+            The element-wise sum of ``values`` over all processes.
+    """
     values = np.atleast_1d(np.asarray(values))
     return allgather(values[None]).sum(axis=0)
 
 
 def any_process(flag):
-    """True on every process if ``flag`` is true on any process."""
+    """
+    Agree on a flag across all processes.
+
+    Args:
+        flag (:obj:`bool`):
+            This process's flag.
+
+    Returns:
+        (:obj:`bool`):
+            ``True`` on every process if ``flag`` is true on any process.
+    """
     return bool(allgather(np.array([bool(flag)])).any())
 
 
@@ -60,6 +89,14 @@ def to_numpy(x):
 
     For small grids only (checks, tests): the array is gathered on every
     device first.
+
+    Args:
+        x (:obj:`jax.Array`):
+            The sharded array.
+
+    Returns:
+        (:obj:`np.ndarray`):
+            The whole of ``x``.
     """
     if isinstance(x, jax.Array) and not x.is_fully_addressable:
         return np.asarray(multihost_utils.process_allgather(x, tiled=True))

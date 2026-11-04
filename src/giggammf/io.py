@@ -33,6 +33,21 @@ def load_density(path, mesh=None, dataset=None, tile=1):
     ``tile > 1`` repeats the cube ``tile`` times along each axis, which is
     still a periodic box: a cube ``tile`` times larger per side, for scaling
     tests, read straight from the small file.
+
+    Args:
+        path (:obj:`str` or :obj:`pathlib.Path`):
+            The ``.npy``, ``.h5`` or ``.hdf5`` file.
+        mesh (:obj:`jax.sharding.Mesh`, optional):
+            The device mesh. Defaults to ``giggammf.make_mesh()``.
+        dataset (:obj:`str`, optional):
+            The dataset name; required for HDF5 files.
+        tile (:obj:`int`, optional):
+            The number of times the cube is repeated along each axis.
+            Defaults to ``1``.
+
+    Returns:
+        (:obj:`3D float32 jax.Array`):
+            The density cube, x-sharded over ``mesh``.
     """
     mesh = make_mesh() if mesh is None else mesh
     path = str(path)
